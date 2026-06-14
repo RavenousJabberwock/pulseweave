@@ -1,6 +1,8 @@
 # pulseweave
 A minimalist HTML5 puzzle‑arcade game about waves, patterns, and emergent simplicity.
 
+Play this game at https://ravenousjabberwock.github.io/pulseweave/
+
 # Overview
 Pulse Weave is a tiny, self‑contained HTML5 game designed to demonstrate how much expressive gameplay can emerge from a single mechanic. The entire game lives in one file — no dependencies, no build steps, no frameworks.
 
@@ -94,7 +96,7 @@ Entire game in one file
 # Running the Game
 Just open the HTML file in any modern browser:
 
-or visit the project github.io page at 
+or visit the project github.io page at https://ravenousjabberwock.github.io/pulseweave/
 
 No build step. No server. No dependencies.
 
