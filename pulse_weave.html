@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pulse Weave</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #05060a;
+    color: #e0e6ff;
+    font-family: system-ui, sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+  #ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+    font-size: 14px;
+    background: rgba(5, 6, 10, 0.7);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #30364f;
+  }
+  #ui span {
+    margin-right: 12px;
+  }
+  #ui button {
+    background: #30364f;
+    color: #e0e6ff;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  #ui button:hover {
+    background: #3f4764;
+  }
+  canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<div id="ui">
+  <span id="levelLabel">Level: 1</span>
+  <span id="movesLabel">Moves: 0 / 12</span>
+  <span id="statusLabel"></span>
+  <button id="restartBtn">Restart</button>
+</div>
+<canvas id="game"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const levelLabel = document.getElementById('levelLabel');
+  const movesLabel = document.getElementById('movesLabel');
+  const statusLabel = document.getElementById('statusLabel');
+  const restartBtn = document.getElementById('restartBtn');
+
+  let gridSize = 9;
+  let cellSize = 40;
+  let grid = [];
+  let pulses = [];
+  let moves = 0;
+  let maxMoves = 12;
+  let level = 1;
+  let animTime = 0;
+  let lastTime = performance.now();
+  let gameOver = false;
+
+  function resize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvas.width = w;
+    canvas.height = h;
+    const minDim = Math.min(w, h);
+    cellSize = Math.floor(minDim / (gridSize + 2));
+  }
+
+  window.addEventListener('resize', resize);
+
+  function initGrid() {
+    grid = [];
+    for (let y = 0; y < gridSize; y++) {
+      const row = [];
+      for (let x = 0; x < gridSize; x++) {
+        // Random initial state, slightly biased off
+        row.push(Math.random() < 0.35 ? 1 : 0);
+      }
+      grid.push(row);
+    }
+  }
+
+  function resetGame() {
+    moves = 0;
+    maxMoves = 10 + level * 2;
+    gameOver = false;
+    pulses = [];
+    initGrid();
+    updateLabels();
+    statusLabel.textContent = '';
+  }
+
+  function updateLabels() {
+    levelLabel.textContent = 'Level: ' + level;
+    movesLabel.textContent = 'Moves: ' + moves + ' / ' + maxMoves;
+  }
+
+  function allOn() {
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
+        if (grid[y][x] === 0) return false;
+      }
+    }
+    return true;
+  }
+
+  function addPulse(cx, cy) {
+    pulses.push({
+      cx, cy,
+      radius: 0,
+      maxRadius: gridSize + 2,
+      strength: 1
+    });
+  }
+
+  function toggleCell(x, y) {
+    if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return;
+    grid[y][x] = grid[y][x] ? 0 : 1;
+  }
+
+  function applyPulse(pulse) {
+    const r = Math.floor(pulse.radius);
+    if (r < 0) return;
+    // plus-shape propagation: up, down, left, right
+    const cx = pulse.cx;
+    const cy = pulse.cy;
+    // center
+    toggleCell(cx, cy);
+    // arms
+    for (let i = 1; i <= r; i++) {
+      toggleCell(cx + i, cy);
+      toggleCell(cx - i, cy);
+      toggleCell(cx, cy + i);
+      toggleCell(cx, cy - i);
+    }
+  }
+
+  function update(dt) {
+    animTime += dt;
+    // update pulses
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      const prevRadius = p.radius;
+      p.radius += dt * 6; // speed
+      if (Math.floor(p.radius) !== Math.floor(prevRadius)) {
+        applyPulse(p);
+      }
+      if (p.radius > p.maxRadius) {
+        pulses.splice(i, 1);
+      }
+    }
+
+    if (!gameOver) {
+      if (allOn()) {
+        gameOver = true;
+        statusLabel.textContent = 'Completed!';
+        level++;
+        setTimeout(() => {
+          resetGame();
+        }, 1200);
+      } else if (moves >= maxMoves && pulses.length === 0) {
+        gameOver = true;
+        statusLabel.textContent = 'Out of moves.';
+      }
+    }
+  }
+
+  function draw() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // background gradient
+    const grad = ctx.createRadialGradient(
+      w / 2, h / 2, 0,
+      w / 2, h / 2, Math.max(w, h) / 1.2
+    );
+    grad.addColorStop(0, '#0b1020');
+    grad.addColorStop(1, '#05060a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const gridPixelSize = cellSize * gridSize;
+    const offsetX = (w - gridPixelSize) / 2;
+    const offsetY = (h - gridPixelSize) / 2;
+
+    // draw grid cells
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
+        const cx = offsetX + x * cellSize;
+        const cy = offsetY + y * cellSize;
+        const state = grid[y][x];
+
+        const base = state ? '#9fd5ff' : '#20263a';
+        const glow = state ? '#4fb3ff' : '#101320';
+
+        // cell background
+        ctx.fillStyle = base;
+        ctx.beginPath();
+        ctx.roundRect(cx + 4, cy + 4, cellSize - 8, cellSize - 8, 6);
+        ctx.fill();
+
+        // subtle glow
+        ctx.strokeStyle = glow;
+        ctx.lineWidth = state ? 2 : 1;
+        ctx.beginPath();
+        ctx.roundRect(cx + 6, cy + 6, cellSize - 12, cellSize - 12, 4);
+        ctx.stroke();
+      }
+    }
+
+    // draw pulses
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    for (const p of pulses) {
+      const r = p.radius * cellSize;
+      const centerX = p.cx * cellSize + cellSize / 2;
+      const centerY = p.cy * cellSize + cellSize / 2;
+      ctx.strokeStyle = 'rgba(159, 213, 255, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX - r, centerY);
+      ctx.lineTo(centerX + r, centerY);
+      ctx.moveTo(centerX, centerY - r);
+      ctx.lineTo(centerX, centerY + r);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function loop(now) {
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function canvasToCell(x, y) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const gridPixelSize = cellSize * gridSize;
+    const offsetX = (w - gridPixelSize) / 2;
+    const offsetY = (h - gridPixelSize) / 2;
+    const gx = Math.floor((x - offsetX) / cellSize);
+    const gy = Math.floor((y - offsetY) / cellSize);
+    if (gx < 0 || gy < 0 || gx >= gridSize || gy >= gridSize) return null;
+    return { x: gx, y: gy };
+  }
+
+  canvas.addEventListener('click', (e) => {
+    if (gameOver) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const cell = canvasToCell(cx, cy);
+    if (!cell) return;
+    moves++;
+    updateLabels();
+    addPulse(cell.x, cell.y);
+  });
+
+  restartBtn.addEventListener('click', () => {
+    level = 1;
+    resetGame();
+  });
+
+  resize();
+  resetGame();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
